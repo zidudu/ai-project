@@ -1,0 +1,126 @@
+from openai import OpenAI
+import streamlit as st
+# from streamlit_google_oauth2 import GoogleOAuth2
+import base64
+
+# Google OAuth2 설정
+client_id = "YOUR_GOOGLE_CLIENT_ID"
+client_secret = "YOUR_GOOGLE_CLIENT_SECRET"
+redirect_uri = "YOUR_REDIRECT_URI"
+
+# OAuth2 객체 생성
+#oauth2 = GoogleOAuth2(client_id, client_secret, redirect_uri)
+
+st.set_page_config(page_title="친근한 챗봇", page_icon="🤖")
+
+# 배경 이미지 함수
+def add_bg_from_local(image_file):
+    with open(image_file, "rb") as image_file:
+        encoded_string = base64.b64encode(image_file.read())
+    st.markdown(
+    f"""
+    <style>
+    .stApp {{
+        background-image: url(data:image/{"png"};base64,{encoded_string.decode()});
+        background-size: cover;
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True
+    )
+
+# 배경 이미지 추가 (로컬 이미지 파일 경로로 변경하세요)
+add_bg_from_local('C:/Users/COM/Desktop/cat.jpg')
+
+st.markdown(
+    """
+    <style>
+    .user-message {
+        background-color: #e6f3ff;
+        padding: 10px;
+        border-radius: 15px;
+        margin-bottom: 10px;
+    }
+    .bot-message {
+        background-color: #f0f0f0;
+        padding: 10px;
+        border-radius: 15px;
+        margin-bottom: 10px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+st.title("친근한 챗봇")
+
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+if "openai_model" not in st.session_state:
+    st.session_state["openai_model"] = "gpt-3.5-turbo"
+
+system_message = '''
+너의 이름은 나제.
+너는 항상 존댓말을 하는 챗봇이야. 그리고 언제나 친근하게 대답해줘. 
+영어로 질문을 받아도 무조건 한글로 답변해줘.
+한글이 아닌 답변일 때 다시 생각해서 꼭 한글로 만들어줘
+모든 답변 끝에는 답변에 맞는 이모티콘도 추가해줘.
+그리고 언제나 질문도 하나씩 해줘. 질문할때도 존댓말로 말해줘
+'''
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    st.session_state.messages = [{"role": "user", "content": system_message}]
+
+for message in st.session_state.messages[1:]:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+if prompt := st.chat_input("무엇을 도와드릴까요?"):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(f'<div class="user-message">{prompt}</div>', unsafe_allow_html=True)
+
+    with st.chat_message("assistant"):
+        with st.spinner("나제가 생각 중입니다..."):
+            stream = client.chat.completions.create(
+                model=st.session_state["openai_model"],
+                messages=[
+                    {"role": m["role"], "content": m["content"]}
+                    for m in st.session_state.messages
+                ],
+                temperature=st.session_state.get("temperature", 1.0),
+                top_p=st.session_state.get("top_p", 0.1),
+                stream=True,
+            )
+            response = st.write_stream(stream)
+        st.markdown(f'<div class="bot-message">{response}</div>', unsafe_allow_html=True)
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+with st.sidebar:
+    st.title("설정")
+    st.session_state["openai_model"] = st.selectbox("모델 선택", ["gpt-3.5-turbo", "gpt-4"])
+    st.session_state["temperature"] = st.slider("창의성 조절", 0.0, 1.0, 1.0)
+    st.session_state["top_p"] = st.slider("다양성 조절", 0.0, 1.0, 0.1)
+
+    if st.button("대화 내용 다운로드"):
+        chat_content = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages[1:]])
+        st.download_button("대화 내용 다운로드", chat_content, "chat_history.txt")
+    
+#     # 구글 로그인 버튼
+#     login_info = oauth2.login(
+#         button_text="구글로 로그인",
+#         logout_button_text="로그아웃"
+#     )
+
+#     if login_info:
+#         st.write(f"안녕하세요, {login_info['name']}님!")
+#         st.write(f"이메일: {login_info['email']}")
+#     else:
+#         st.write("로그인이 필요합니다.")
+
+# # 메인 영역에 로그인 상태 표시
+# if login_info:
+#     st.sidebar.success(f"{login_info['name']}님으로 로그인되었습니다.")
+# else:
+#     st.sidebar.warning("로그인되지 않았습니다.")
