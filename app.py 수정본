@@ -1,0 +1,104 @@
+import streamlit as st
+from google_auth_oauthlib.flow import Flow
+from google.oauth2 import id_token
+from google.auth.transport import requests
+import base64
+
+# 비밀 변수 불러오기
+client_id = st.secrets["google_oauth"]["client_id"]
+client_secret = st.secrets["google_oauth"]["client_secret"]
+redirect_uri = st.secrets["google_oauth"]["redirect_uri"]
+
+# OAuth2 Flow 설정
+flow = Flow.from_client_config(
+    {
+        "web": {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+        }
+    },
+    scopes=["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"],
+    redirect_uri=redirect_uri
+)
+
+st.set_page_config(page_title="친근한 챗봇", page_icon="🤖")
+
+# 배경 이미지 함수
+def add_bg_from_local(image_file):
+    with open(image_file, "rb") as image_file:
+        encoded_string = base64.b64encode(image_file.read())
+    st.markdown(
+    f"""
+    <style>
+    .stApp {{
+        background-image: url(data:image/{"png"};base64,{encoded_string.decode()});
+        background-size: cover;
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True
+    )
+
+# 배경 이미지 추가 (로컬 이미지 파일 경로로 변경하세요)
+add_bg_from_local('C:/Users/COM/Desktop/cat.jpg')
+# 세션 상태 초기화
+if "user_info" not in st.session_state:
+    st.session_state.user_info = None
+
+# 로그인 상태 확인
+def is_logged_in():
+    return st.session_state.user_info is not None
+
+# 로그인 함수
+def login():
+    authorization_url, _ = flow.authorization_url(prompt="consent")
+    st.markdown(f"[Google로 로그인](javascript:window.open('{authorization_url}','_blank','width=500,height=600'))")
+
+# 로그아웃 함수
+def logout():
+    st.session_state.user_info = None
+    st.experimental_rerun()
+
+# 콜백 처리
+def handle_callback():
+    if "code" in st.experimental_get_query_params():
+        code = st.experimental_get_query_params()["code"][0]
+        flow.fetch_token(code=code)
+        credentials = flow.credentials
+        token_info = id_token.verify_oauth2_token(
+            credentials.id_token, requests.Request(), client_id
+        )
+        st.session_state.user_info = token_info
+        st.experimental_set_query_params()
+        st.experimental_rerun()
+
+# 콜백 처리
+handle_callback()
+
+# 메인 애플리케이션 UI
+st.title("친근한 챗봇")
+
+# 사이드바
+with st.sidebar:
+    st.title("설정")
+    
+    if is_logged_in():
+        st.write(f"안녕하세요, {st.session_state.user_info['name']}님!")
+        st.write(f"이메일: {st.session_state.user_info['email']}")
+        if st.button("로그아웃"):
+            logout()
+    else:
+        login()
+
+    # 여기에 다른 사이드바 설정을 추가할 수 있습니다.
+
+# 챗봇 로직
+if is_logged_in():
+    # 여기에 챗봇 대화 로직을 구현합니다.
+    st.write("챗봇과 대화를 시작하세요.")
+else:
+    st.write("로그인 후 챗봇을 사용할 수 있습니다.")
+
+# 추가적인 UI 요소나 기능을 여기에 구현할 수 있습니다.
